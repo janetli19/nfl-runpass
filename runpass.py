@@ -59,11 +59,8 @@ def get_decisions(nfl_pbp, max_ytg=21):
 
     extra_pts = one_pt_prob * one_pt_success + 2 * (1 - one_pt_prob) * two_pt_success
 
-    # average starting position after kickoff
-    kickoffs = nfl_pbp[nfl_pbp['kickoff_attempt'] == 1].index
-    kickoff_dist = round(np.mean(nfl_pbp.iloc[kickoffs+1].yardline_100))
-
     # expected points from touchdown
+    kickoff_dist = 75 # average starting position after kickoff
     td_pts = 6 + extra_pts - firstDown_pts[kickoff_dist]
 
     def get_firstdown(play_type):
@@ -105,13 +102,15 @@ def get_decisions(nfl_pbp, max_ytg=21):
     for i in range(50): # prob of field goal at any field position >= 50 is set to 0
         rows = plays.yardline_100==i+1
         fg_prob[i] = np.mean(plays[rows].posteam_score_post > plays[rows].posteam_score)
+        if fg_prob[i] != fg_prob[i]: # if nan
+            fg_prob[i] = 0
 
     # nonparametric smooth
     fg_nonparam = nonparam_smooth(fg_prob.copy(), window=21)
     fg_nonparam[fg_nonparam < 0] = 0
     fg_nonparam[fg_nonparam > 1] = 1
 
-    fg_prob = dict(zip(range(1,100),fg_prob))
+    fg_prob = dict(zip(range(1,100),fg_nonparam))
 
     # expected value of field goal given field position
     fg = {}
@@ -142,7 +141,7 @@ def get_decisions(nfl_pbp, max_ytg=21):
     points.fill(300)
     for yardline in range(1,100):
         for ytg in range(1, min(yardline+1, max_ytg)):
-            if yardline + ytg > 100:
+            if ytg > yardline:
                 decision[ytg][yardline] = 0
                 points[ytg][yardline] = 300
             else:
@@ -150,36 +149,61 @@ def get_decisions(nfl_pbp, max_ytg=21):
                 points[ytg][yardline] = max([fg[yardline], punt[yardline], run_play[yardline][ytg], pass_play[yardline][ytg]])
     return decision, points
 
+def get_coach_decisions(nfl_pbp, max_ytg=21):
+    """
+    Returns matrix of most popular coaches' decisions where row = yardline and col = yards to go
+    0 = impossible, 1 = field goal, 2 = punt, 3 = run, 4 = pass
+
+    nfl_pbp: NFL play-by-play dataset
+    max_ytg: max yards to go + 1
+    """    
+    decision = np.zeros((max_ytg, 100))
+    for yardline in range(1,100):
+        for ytg in range(1, min(yardline+1, max_ytg)):
+            if ytg > yardline:
+                decision[ytg][yardline] = 0
+            else:
+                plays = nfl_pbp[((nfl_pbp.down == 4) & (nfl_pbp.yardline_100 == yardline) & (nfl_pbp.ydstogo == ytg))]
+                if len(plays) != 0:
+                    decision[ytg][yardline] = 1 + np.nanargmax([
+                        np.sum(plays.field_goal_attempt == 1),
+                        np.sum(plays.play_type == 'punt'),
+                        np.sum(plays.play_type == 'run'),
+                        np.sum(plays.play_type == 'pass')
+                    ])
+                else: 
+                    decision[ytg][yardline] = 0
+    return decision
 
 ### Plot decisions
 
-def plot_decisions(max_ytg=21, title=''):
-    plt.figure(figsize=(15,8))
-    ax = sns.heatmap(decision, mask=np.ma.masked_values(decision, 0).mask, vmin=0, vmax=4, xticklabels=5, 
-                    yticklabels=1, cmap='viridis', cbar=True, linewidths=.1)
-    plt.xlim(1,100)
-    plt.ylim(max_ytg,1)
-    plt.title(title)
-    plt.xlabel("Field position (yards to goal)")
-    plt.ylabel("4th and ...")
-    for item in ([ax.xaxis.label, ax.yaxis.label] + ax.get_xticklabels() + ax.get_yticklabels()):
-        item.set_fontsize(14)
-    plt.savefig('decisions.png')
+def plot_decisions(decision, max_ytg=21, title='', filename='decisions.png'):
+    plt.figure(figsize=(20,5))
+    with sns.axes_style('white'):
+        ax = sns.heatmap(decision, mask=np.ma.masked_values(decision, 0).mask, vmin=0, vmax=4, xticklabels=5, 
+                    yticklabels=5, cmap='viridis', cbar=True, linewidths=.1)
+        ax.set(xlim=(1,100), ylim=(max_ytg,1))
+    plt.title(title, fontsize=18)
+    plt.xticks(fontsize=13)
+    plt.yticks(fontsize=13)
+    plt.xlabel("Field position (yards to goal)", fontsize=15)
+    plt.ylabel("4th and ...", fontsize=15)
+    plt.savefig(filename)
 
 
 ### Plot expected points
 
-def plot_points(max_ytg=21, title=''):
-    plt.figure(figsize=(15,7))
-    ax = sns.heatmap(points, mask=np.ma.masked_values(points, 300).mask, xticklabels=5, yticklabels=1, 
-                    cmap='RdYlGn', cbar=True, linewidths=.1)
-    plt.xlim(1,100)
-    plt.ylim(max_ytg,1)
-    plt.title(title)
-    plt.xlabel("Field position (yards to goal)")
-    plt.ylabel("4th and ...")
-    for item in ([ax.xaxis.label, ax.yaxis.label] + ax.get_xticklabels() + ax.get_yticklabels()):
-        item.set_fontsize(13)
+def plot_points(points, max_ytg=21, title=''):
+    plt.figure(figsize=(20,5))
+    with sns.axes_style('white'):
+        ax = sns.heatmap(points, mask=np.ma.masked_values(points, 300).mask, xticklabels=5, yticklabels=5, 
+                        cmap='RdYlGn', cbar=True, linewidths=.1)
+        ax.set(xlim=(1,100), ylim=(max_ytg,1))
+    plt.title(title, fontsize=18)
+    plt.xticks(fontsize=13)
+    plt.yticks(fontsize=13)
+    plt.xlabel("Field position (yards to goal)", fontsize=15)
+    plt.ylabel("4th and ...", fontsize=15)
     plt.savefig('points.png')
 
 
@@ -187,7 +211,13 @@ def plot_points(max_ytg=21, title=''):
 DATADIR = ''
 full_data = pd.read_csv(DATADIR + 'NFL_PbP_2009_2018_4thDownAnalysis.csv')
 
-nfl_pbp = full_data # can add filters here
+# nfl_pbp = full_data[full_data.qtr == 1]
+nfl_pbp = full_data
+
+# plot coaches' decisions
+coaches = get_coach_decisions(nfl_pbp)
+plot_decisions(coaches, title="Coaches' Decisions on 4th Down", filename='coaches.png')
+# plot recommended decisions
 decision, points = get_decisions(nfl_pbp)
-plot_decisions(title='Decision')
-plot_points(title='Expected Value (Points) of First Down')
+plot_decisions(decisions, title='Decision')
+plot_points(points, title='Expected Value (Points) of First Down')
