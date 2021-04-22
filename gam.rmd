@@ -4,7 +4,23 @@ library(mgcv)
 nfldata <- read.csv("nflmodeldata.csv")
 nfldata$margin_time_ratio <- nfldata$expected_margin/(nfldata$game_seconds_remaining + 1)
 
-model <- mgcv::bam(posteam_won ~ s(expected_margin) + s(game_seconds_remaining) + s(margin_time_ratio), data = nfldata, family = "binomial")
+set.seed(143)
+
+test.id = sample(seq(1,nrow(nfldata), 1), floor(nrow(nfldata)*0.3))
+nfldata_test = nfldata[test.id,]
+nfldata_train = nfldata[-test.id,]
+
+model <- mgcv::bam(posteam_won ~ s(expected_margin) + s(game_seconds_remaining) + s(margin_time_ratio), data = nfldata_train, family = "binomial")
+
+summary(model)
+
+RMSE = function(y,yhat){
+  SSE = sum((y-yhat)^2, na.rm = T) 
+  return(sqrt(SSE/length(y)))
+}
+
+RMSE(nfldata_test$posteam_won, predict(model, newdata = nfldata_test, type = "response"))
+RMSE(nfldata_train$posteam_won, predict(model, newdata = nfldata_train, type = "response"))
 ```
 
 Store Python expected points for each play type as lists so we can make predictions
@@ -33,7 +49,7 @@ f <- function(ydline, ydstogo, margin_curr, time_left){
   
   x_pass <- data.frame("expected_margin" = margin_curr + pass_points[[ydline+1]][ydstogo], "game_seconds_remaining" = time_left, "margin_time_ratio" = (margin_curr + pass_points[[ydline+1]][ydstogo])/(time_left+1))
   predictions[4] = mgcv::predict.bam(model, newdata = x_pass, type = "response")[1]
-  
+  print(predictions)
   return(which.max(predictions))
 }
 ```
@@ -48,16 +64,45 @@ print(predicted[1])
 ```{r}
 test <- c()
 for(ydline in 1:99){
-  for(ydtogo in 1:10){
-    test = c(test, f(ydline, ydtogo, 7, 600))
+  for(ydtogo in 1:20){
+    test = c(test, f(ydline, ydtogo, -7, 600))
   }
 }
 
-print(test)
-testMat <- matrix(test, nrow = 10)
-print(testMat)
+testMat <- matrix(test, nrow = 20)
+for(i in 1:99){
+  for(j in 1:20){
+    if(i < j){
+      testMat[j, i] = 5
+    }
+    if((10-j)+i>99){
+      testMat[j, i] = 5
+    }
+  }
+}
+testReverted <- as.numeric(testMat)
 
-heatmap(testMat, Colv = NA, Rowv = NA, xlab = "Yardline", ylab = "Yards to Go",
-        main = "Optimal Decisions for Win Prob. \n with 7-point lead, 10 mins to go")
-legend(x = "right", legend = c("punt", "field goal", "run", "pass"), fill = heat.colors(4))
+library(reshape2); library(ggplot2)
+
+col <- c("red", "blue", "green", "yellow", "white")
+colnames(testMat) <- seq(1, 99, by = 1)
+df <- data.frame(ydtogo = rep(1:20, 99), ydline = rep(99:1, each = 20), decision = testReverted)
+p<-ggplot(df,aes(x=max(ydline)+1-ydline,y=ydtogo))+
+    #tile layer
+    geom_tile(aes(fill=factor(decision))) +
+    #setting the color
+    scale_fill_manual(
+        "Play Type",
+        values=col,
+        breaks=c("1","2","3","4","5"),
+        labels=c("Punt","Field Goal", "Run", "Pass","Impossible")) +
+    scale_y_reverse() +
+    ggtitle("NFL Fourth Down, 10 Min. Remaining \n and Score Margin -7") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    xlab("Yardline") + 
+    ylab("Yards to Go")
+
+p
+
+f(8, 5, -10, 60)
 ```
