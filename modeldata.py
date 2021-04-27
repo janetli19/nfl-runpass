@@ -22,12 +22,12 @@ def poly_smooth(x,y,deg):
 
 # load data
 DATADIR = '/Users/EthanLee/Desktop/STAT 143/'
-nfl_pbp = pd.read_csv(DATADIR + 'NFL_PbP_2009_2018_4thDownAnalysis.csv')
-print(nfl_pbp.shape)
+nfl = pd.read_csv(DATADIR + 'NFL_PbP_2009_2018_4thDownAnalysis.csv')
+
+nfl_pbp = nfl[nfl['down'] >=3]
 
 # Remove overtime plays
 nfl_pbp_prefiltered = nfl_pbp[nfl_pbp['game_half'] != "Overtime"]
-print(nfl_pbp_prefiltered.shape)
 
 # Code for getting posteam_won, indicator of whether team with possession won
 winners = {}
@@ -64,10 +64,6 @@ print(nfl_filtered.shape)
 # Get only fourth down -> necessary b/c atm we have expected points calculator for fourth down only
 nfl_filtered_fourth = nfl_filtered[nfl_filtered['down'] == 4]
 print(nfl_filtered_fourth.shape)
-
-
-
-
 
 ### Basically ctrl+c ctrl+v the expected points calculator functions
 
@@ -112,6 +108,8 @@ def get_firstdown(play_type, max_ytg=21):
 
     # piecewise polynomial smooth
     firstDown_poly = poly_smooth(np.arange(1,max_ytg), firstDown_prob.copy(), deg=3)[0]
+    print(play_type)
+    print(firstDown_poly)
     firstDown_prob = dict(zip(range(1,max_ytg), firstDown_poly))
 
     # expected value of going for it, given yardline and yards to go
@@ -145,7 +143,8 @@ for i in range(50): # prob of field goal at any field position >= 50 is set to 0
 fg_nonparam = nonparam_smooth(fg_prob.copy(), window=21)
 fg_nonparam[fg_nonparam < 0] = 0
 fg_nonparam[fg_nonparam > 1] = 1
-
+print("field goal")
+print(fg_nonparam)
 fg_prob = dict(zip(range(1,100),fg_nonparam))
 
 # expected value of field goal given field position
@@ -163,12 +162,16 @@ for yds in range(1, 100):
 # expected value of punt given field position
 plays = nfl_pbp[nfl_pbp.play_type == "punt"]
 punt = {}
+punt_dists = []
 for yds in range(1, 100):
     punt_dist = np.mean(plays[plays.yardline_100==yds].kick_distance) - np.mean(plays[plays.yardline_100==yds].return_yards)
+    punt_dists.append(punt_dist)
     if punt_dist != punt_dist: # if nan, then touchback
         punt[yds] = -1 * firstDown_pts[80]
     else:
         punt[yds] = -1 * firstDown_pts[min(round(100-yds+punt_dist), 80)]
+print("punt")
+print(punt_dists)
 
 # print(fg)
 # print(fg.values())

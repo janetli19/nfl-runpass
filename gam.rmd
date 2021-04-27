@@ -55,7 +55,9 @@ f <- function(ydline, ydstogo, margin_curr, time_left){
 ```
 
 ```{r}
-x <- data.frame("expected_margin" = 2, "game_seconds_remaining" = 999, "margin_time_ratio" = 0.002)
+margin = 2
+secs = 99
+x <- data.frame("expected_margin" = margin, "game_seconds_remaining" = secs, "margin_time_ratio" = margin/(secs+1))
 predicted <- mgcv::predict.bam(model, newdata = x, type = "response")
 
 print(predicted[1])
@@ -103,6 +105,4 @@ p<-ggplot(df,aes(x=max(ydline)+1-ydline,y=ydtogo))+
     ylab("Yards to Go")
 
 p
-
-f(8, 5, -10, 60)
 ```

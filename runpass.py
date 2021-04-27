@@ -33,7 +33,7 @@ def get_decisions(nfl_pbp, max_ytg=21):
     """
 
     ### Going for it on 4th down
-    
+
     # expected value of 1st down given yardline
     plays = nfl_pbp[nfl_pbp['down'] == 1]
     firstDown_pts = {}
@@ -44,8 +44,8 @@ def get_decisions(nfl_pbp, max_ytg=21):
     firstDown_cost = {}
     for yds in range(1,100):
         firstDown_cost[yds] = -1 * firstDown_pts[100-yds]
-    
-    
+
+
     ## Expected points from touchdown
 
     # 1 or 2 pt conversion
@@ -73,7 +73,7 @@ def get_decisions(nfl_pbp, max_ytg=21):
         firstDown_prob = np.zeros(max_ytg-1)
         for ytg in range(1, max_ytg):
             firstDown_prob[ytg-1] = np.mean(plays.yards_gained[plays.ydstogo == ytg] >= ytg)
-        
+
         # piecewise polynomial smooth
         firstDown_poly = poly_smooth(np.arange(1,max_ytg), firstDown_prob.copy(), deg=3)[0]
         firstDown_prob = dict(zip(range(1,max_ytg), firstDown_poly))
@@ -156,7 +156,7 @@ def get_coach_decisions(nfl_pbp, max_ytg=21):
 
     nfl_pbp: NFL play-by-play dataset
     max_ytg: max yards to go + 1
-    """    
+    """
     decision = np.zeros((max_ytg, 100))
     for yardline in range(1,100):
         for ytg in range(1, min(yardline+1, max_ytg)):
@@ -171,7 +171,7 @@ def get_coach_decisions(nfl_pbp, max_ytg=21):
                         np.sum(plays.play_type == 'run'),
                         np.sum(plays.play_type == 'pass')
                     ])
-                else: 
+                else:
                     decision[ytg][yardline] = 0
     return decision
 
@@ -180,7 +180,7 @@ def get_coach_decisions(nfl_pbp, max_ytg=21):
 def plot_decisions(decision, max_ytg=21, title='', filename='decisions.png'):
     plt.figure(figsize=(20,5))
     with sns.axes_style('white'):
-        ax = sns.heatmap(decision, mask=np.ma.masked_values(decision, 0).mask, vmin=0, vmax=4, xticklabels=5, 
+        ax = sns.heatmap(decision, mask=np.ma.masked_values(decision, 0).mask, vmin=0, vmax=4, xticklabels=5,
                     yticklabels=5, cmap='viridis', cbar=True, linewidths=.1)
         ax.set(xlim=(1,100), ylim=(max_ytg,1))
     plt.title(title, fontsize=18)
@@ -196,7 +196,7 @@ def plot_decisions(decision, max_ytg=21, title='', filename='decisions.png'):
 def plot_points(points, max_ytg=21, title=''):
     plt.figure(figsize=(20,5))
     with sns.axes_style('white'):
-        ax = sns.heatmap(points, mask=np.ma.masked_values(points, 300).mask, xticklabels=5, yticklabels=5, 
+        ax = sns.heatmap(points, mask=np.ma.masked_values(points, 300).mask, xticklabels=5, yticklabels=5,
                         cmap='RdYlGn', cbar=True, linewidths=.1)
         ax.set(xlim=(1,100), ylim=(max_ytg,1))
     plt.title(title, fontsize=18)
