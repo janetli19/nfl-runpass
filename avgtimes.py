@@ -20,7 +20,11 @@ nfl = pd.read_csv(DATADIR + 'NFL_PbP_2009_2018_4thDownAnalysis.csv')
 time_of_play = []
 for index, row in nfl.iterrows():
     if index != (nfl.shape[0]-1) and (nfl.iloc[index].play_type == "pass" or nfl.iloc[index].play_type == "run"):
-        time_of_play.append(nfl.iloc[index].game_seconds_remaining - nfl.iloc[index+1].game_seconds_remaining)
+        if(nfl.iloc[index].game_seconds_remaining >= nfl.iloc[index+1].game_seconds_remaining):
+            time_of_play.append(nfl.iloc[index].game_seconds_remaining - nfl.iloc[index+1].game_seconds_remaining)
+        else:
+            # random value that we won't ever use
+            time_of_play.append(-10)
     else:
         # random value that we won't ever use
         time_of_play.append(-10)
@@ -36,7 +40,8 @@ run_plays = nfl_pbp[nfl_pbp['play_type']=='run']
 run_play_time = np.zeros(15)
 for i in range(15):
     rows = run_plays.ydstogo==i+1
-    run_play_time[i] = np.mean(run_plays[rows].time_of_play)
+    temp = run_plays[rows]
+    run_play_time[i] = np.mean(temp[temp["time_of_play"]>=0].time_of_play)
     if run_play_time[i] != run_play_time[i]: # if nan
         run_play_time[i] = 0
 
@@ -51,7 +56,8 @@ pass_plays = nfl_pbp[nfl_pbp['play_type']=='pass']
 pass_play_time = np.zeros(20)
 for i in range(20):
     rows = pass_plays.ydstogo==i+1
-    pass_play_time[i] = np.mean(pass_plays[rows].time_of_play)
+    temp = pass_plays[rows]
+    pass_play_time[i] = np.mean(temp[temp["time_of_play"]>=0].time_of_play)
     if pass_play_time[i] != pass_play_time[i]: # if nan
         pass_play_time[i] = 0
 

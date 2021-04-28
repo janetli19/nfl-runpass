@@ -82,14 +82,15 @@ for yds in range(1,100):
 
 # 1 or 2 pt conversion
 # P(1-pt conversion) * P(successful 1-pt conversion) + 2 * P(2-pt conversion) * P(successful 2-pt conversion)
-one_pt_plays = np.sum(nfl_pbp.extra_point_attempt == 1)
-two_pt_plays = np.sum(nfl_pbp.two_point_attempt == 1)
+one_pt_plays = np.sum(nfl.extra_point_attempt == 1)
+two_pt_plays = np.sum(nfl.two_point_attempt == 1)
 
 one_pt_prob = one_pt_plays / (one_pt_plays + two_pt_plays)
-one_pt_success = np.mean(nfl_pbp[nfl_pbp.extra_point_attempt == 1].extra_point_result == 'good')
-two_pt_success = np.mean(nfl_pbp[nfl_pbp.two_point_attempt == 1].two_point_conv_result == 'success')
+one_pt_success = np.mean(nfl[nfl.extra_point_attempt == 1].extra_point_result == 'good')
+two_pt_success = np.mean(nfl[nfl.two_point_attempt == 1].two_point_conv_result == 'success')
 
 extra_pts = one_pt_prob * one_pt_success + 2 * (1 - one_pt_prob) * two_pt_success
+print(extra_pts)
 
 # expected points from touchdown
 kickoff_dist = 75 # average starting position after kickoff

@@ -81,6 +81,15 @@ punt_dist <- c(NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N
 ```
 
 ```{r}
+run_times <- c(31.3832929,  31.28168727, 31.17007129, 31.04844495, 30.91680825, 30.77516119, 30.62350376, 30.4025587,  30.16752842, 29.97576722, 29.78920837, 29.60785187,
+ 29.43169773, 29.26074595, 29.09499652)
+
+pass_times <- c(18.97991414, 19.16840405, 19.37381944, 19.59616029, 19.83542663, 20.09161843, 20.36473571, 20.53591371, 20.94282281, 21.12593186, 21.31099117, 21.63941815,
+ 22.03776753, 22.60565005, 22.81537369, 22.95953884, 23.03814551, 23.05119369,
+ 22.99868339, 22.88061461)
+```
+
+```{r}
 intercept_probs <- c(0.00569923, 0.00651411, 0.00726134, 0.00794093, 0.00855289, 0.00909721,
  0.00957388, 0.00998292, 0.01032433, 0.01059809, 0.01080422, 0.0106787,
  0.01015682, 0.00996997, 0.01006718, 0.01007537, 0.0100791,  0.01012893,
@@ -145,31 +154,34 @@ f <- function(ydline, ydstogo, margin_curr, time_left){
   
   # Run Plays
   if(ydstogo >= ydline){
-    x_run_success <- data.frame("margin" = -margin_curr - 6, "game_seconds_remaining" = time_left, "margin_time_ratio" = (-margin_curr-6)/(time_left+1), "yardline_100" = 75)
+    x_run_success <- data.frame("margin" = -margin_curr - 6.970960661826777, "game_seconds_remaining" = time_left - run_times[ydstogo], "margin_time_ratio" = (-margin_curr-6.970960661826777)/(time_left - run_times[ydstogo]+1), "yardline_100" = 75)
     run_success_wp <- 1 - mgcv::predict.bam(model, newdata = x_run_success, type = "response")[1]
   }
   else{
-    x_run_success <- data.frame("margin" = margin_curr, "game_seconds_remaining" = time_left, "margin_time_ratio" = (margin_curr)/(time_left+1), "yardline_100" = ydline-ydstogo)
+    x_run_success <- data.frame("margin" = margin_curr, "game_seconds_remaining" = time_left - run_times[ydstogo], "margin_time_ratio" = (margin_curr)/(time_left - run_times[ydstogo]+1), "yardline_100" = ydline-ydstogo)
     run_success_wp <- mgcv::predict.bam(model, newdata = x_run_success, type = "response")[1]
   }
-  x_run_fail <- data.frame("margin" = -margin_curr, "game_seconds_remaining" = time_left, "margin_time_ratio" = (-margin_curr)/(time_left+1), "yardline_100" = 100-ydline)
+  x_run_fail <- data.frame("margin" = -margin_curr, "game_seconds_remaining" = time_left - run_times[ydstogo], "margin_time_ratio" = (-margin_curr)/(time_left - run_times[ydstogo]+1), "yardline_100" = 100-ydline)
   run_fail_wp <- 1-mgcv::predict.bam(model, newdata = x_run_fail, type = "response")[1]
 
   predictions[3] = run_prob[ydstogo]*(run_success_wp)+(1-run_prob[ydstogo])*(run_fail_wp)
   
   # Pass Plays
   if(ydstogo >= ydline){
-    x_pass_success <- data.frame("margin" = -margin_curr - 6, "game_seconds_remaining" = time_left, "margin_time_ratio" = (-margin_curr-6)/(time_left+1), "yardline_100" = 75)
+    x_pass_success <- data.frame("margin" = -margin_curr - 6.970960661826777, "game_seconds_remaining" = time_left - pass_times[ydstogo], "margin_time_ratio" = (-margin_curr-6.970960661826777)/(time_left- pass_times[ydstogo]+1), "yardline_100" = 75)
     pass_success_wp <- 1 - mgcv::predict.bam(model, newdata = x_pass_success, type = "response")[1]
   }
   else{
-    x_pass_success <- data.frame("margin" = margin_curr, "game_seconds_remaining" = time_left, "margin_time_ratio" = (margin_curr)/(time_left+1), "yardline_100" = ydline-ydstogo)
+    x_pass_success <- data.frame("margin" = margin_curr, "game_seconds_remaining" = time_left- pass_times[ydstogo], "margin_time_ratio" = (margin_curr)/(time_left- pass_times[ydstogo]+1), "yardline_100" = ydline-ydstogo)
     pass_success_wp <- mgcv::predict.bam(model, newdata = x_pass_success, type = "response")[1]
   }
-  x_pass_fail <- data.frame("margin" = -margin_curr, "game_seconds_remaining" = time_left, "margin_time_ratio" = (-margin_curr)/(time_left+1), "yardline_100" = 100-ydline)
+  x_pass_fail <- data.frame("margin" = -margin_curr, "game_seconds_remaining" = time_left- pass_times[ydstogo], "margin_time_ratio" = (-margin_curr)/(time_left- pass_times[ydstogo]+1), "yardline_100" = 100-ydline)
   pass_fail_wp <- 1-mgcv::predict.bam(model, newdata = x_pass_fail, type = "response")[1]
   
-  predictions[4] = pass_prob[ydstogo]*(pass_success_wp)+(1-pass_prob[ydstogo])*(pass_fail_wp)
+  x_pass_intercept <- data.frame("margin" = -margin_curr, "game_seconds_remaining" = time_left- pass_times[ydstogo], "margin_time_ratio" = (-margin_curr)/(time_left- pass_times[ydstogo]+1), "yardline_100" = max(min(100-ydline - intercept_return[ydline], 99), 1))
+  pass_intercept_wp <- 1-mgcv::predict.bam(model, newdata = x_pass_intercept, type = "response")[1]
+  
+  predictions[4] = pass_prob[ydstogo]*(pass_success_wp)+(1-pass_prob[ydstogo] - intercept_probs[ydline])*(pass_fail_wp) + intercept_probs[ydline]*pass_intercept_wp
 
   return(which.max(predictions))
 }
@@ -181,9 +193,9 @@ f <- function(ydline, ydstogo, margin_curr, time_left){
 -have some distribution of the final yard line for run and pass separately
   -prediction of how much farther past the 1st down they'll go
 ```{r}
-f(40, 8, -7, 1700)
-f(40, 8, -7, 1200)
-f(40, 8, 7, 1700)
+f(90, 8, -7, 1700)
+f(50, 8, -7, 1200)
+f(69, 6, 7, 1700)
 f(40, 8, 7, 1200)
 ```
 
@@ -193,7 +205,7 @@ for(ydline in 1:99){
   for(ydtogo in 1:15){
     print(ydline)
     print(ydtogo)
-    test = c(test, f(ydline, ydtogo, 7, 1700))
+    test = c(test, f(ydline, ydtogo, -7, 1200))
   }
 }
 
@@ -225,7 +237,7 @@ p<-ggplot(df,aes(x=max(ydline)+1-ydline,y=ydtogo))+
         breaks=c("1","2","3","4","5"),
         labels=c("Punt","Field Goal", "Run", "Pass","Impossible")) +
     scale_y_reverse() +
-    ggtitle("NFL Fourth Down, 28.33 Min. Remaining \n and Score Margin +7") +
+    ggtitle("NFL Fourth Down, 20 Min. Remaining \n and Score Margin -7") +
     theme(plot.title = element_text(hjust = 0.5)) +
     xlab("Yardline") + 
     ylab("Yards to Go")
