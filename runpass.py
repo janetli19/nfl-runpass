@@ -40,12 +40,6 @@ def get_decisions(nfl_pbp, max_ytg=21):
     for yds in range(1,100):
         firstDown_pts[yds] = np.mean(plays[plays.yardline_100 == yds].next_score_relative_to_posteam)
 
-    # cost of turnover given yardline
-    firstDown_cost = {}
-    for yds in range(1,100):
-        firstDown_cost[yds] = -1 * firstDown_pts[100-yds]
-
-
     ## Expected points from touchdown
 
     # 1 or 2 pt conversion
@@ -77,6 +71,11 @@ def get_decisions(nfl_pbp, max_ytg=21):
         # piecewise polynomial smooth
         firstDown_poly = poly_smooth(np.arange(1,max_ytg), firstDown_prob.copy(), deg=3)[0]
         firstDown_prob = dict(zip(range(1,max_ytg), firstDown_poly))
+
+        # cost of turnover given yardline
+        firstDown_cost = {}
+        for yds in range(1,100):
+            firstDown_cost[yds] = -1 * firstDown_pts[100-yds]
 
         # expected value of going for it, given yardline and yards to go
         goforit = {}
@@ -218,6 +217,6 @@ nfl_pbp = full_data
 coaches = get_coach_decisions(nfl_pbp)
 plot_decisions(coaches, title="Coaches' Decisions on 4th Down", filename='coaches.png')
 # plot recommended decisions
-decision, points = get_decisions(nfl_pbp)
-plot_decisions(decisions, title='Decision')
-plot_points(points, title='Expected Value (Points) of First Down')
+decision, points = get_decisions(nfl_pbp, max_ytg=16)
+plot_decisions(decision, max_ytg=16, title='Decision', filename='decisions.png')
+# plot_points(points, title='Expected Value (Points) of First Down')
