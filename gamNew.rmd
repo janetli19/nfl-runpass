@@ -181,7 +181,8 @@ f <- function(ydline, ydstogo, margin_curr, time_left){
 Testing a few values out for sanity check:
 ```{r}
 
-f(40, 5, -7, 300)
+f(40, 11, -7, 300)
+f(40, 11, -14, 300)
 f(40, 5, -7, 600)
 f(25, 6, 7, 300)
 f(25, 6, 7, 600)
@@ -194,6 +195,10 @@ for(ydline in 1:99){
   for(ydtogo in 1:15){
     print(ydline)
     print(ydtogo)
+    # third input is score margin for 4th down team
+    # fourth is seconds remaining
+    # -7, 300, 600, 1200
+    # -14, 300, 600
     test = c(test, f(ydline, ydtogo, 7, 300))
   }
 }
@@ -234,49 +239,3 @@ p<-ggplot(df,aes(x=max(ydline)+1-ydline,y=ydtogo))+
 p
 ```
 
-Generate heatmap of decision suggestions:
-```{r}
-test <- c()
-for(ydline in 1:99){
-  for(ydtogo in 1:15){
-    print(ydline)
-    print(ydtogo)
-    test = c(test, f(ydline, ydtogo, -7, 1700))
-  }
-}
-
-testMat <- matrix(test, nrow = 15)
-for(i in 1:99){
-  for(j in 1:15){
-    if(i < j){
-      testMat[j, i] = 5
-    }
-    if((10-j)+i>99){
-      testMat[j, i] = 5
-    }
-  }
-}
-testReverted <- as.numeric(testMat)
-
-library(ggplot2)
-
-col <- c("red", "blue", "green", "yellow", "white")
-colnames(testMat) <- seq(1, 99, by = 1)
-df <- data.frame(ydtogo = rep(1:15, 99), ydline = rep(99:1, each = 15), decision = testReverted)
-p<-ggplot(df,aes(x=max(ydline)+1-ydline,y=ydtogo))+
-    #tile layer
-    geom_tile(aes(fill=factor(decision))) +
-    #setting the color
-    scale_fill_manual(
-        "Play Type",
-        values=col,
-        breaks=c("1","2","3","4","5"),
-        labels=c("Punt","Field Goal", "Run", "Pass", "Impossible")) +
-    scale_y_reverse() +
-    ggtitle("NFL Fourth Down, ~30 Min. Remaining \n and Score Margin -7") +
-    theme(plot.title = element_text(hjust = 0.5)) +
-    xlab("Yardline") + 
-    ylab("Yards to Go")
-
-p
-```
