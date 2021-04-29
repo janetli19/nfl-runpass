@@ -7,16 +7,11 @@ def nonparam_smooth(y,smooth_type='savgol',window=19):
         y[~np.isnan(y)] = signal.savgol_filter(y[~np.isnan(y)],window,2)
     return y
 
-def poly_smooth(x,y,deg):
-    nanvals = np.isnan(y)
-    pfit,cov = np.polyfit(x[~nanvals],y[~nanvals],deg, cov=True)
-    yp = np.poly1d(pfit)(x)
-    return yp,pfit,cov
-
 # load data
 DATADIR = '/Users/EthanLee/Desktop/STAT 143/'
 nfl = pd.read_csv(DATADIR + 'NFL_PbP_2009_2018_4thDownAnalysis.csv')
 
+# Get time of play for pass and run plays
 time_of_play = []
 for index, row in nfl.iterrows():
     if index != (nfl.shape[0]-1) and (nfl.iloc[index].play_type == "pass" or nfl.iloc[index].play_type == "run"):
@@ -31,6 +26,7 @@ for index, row in nfl.iterrows():
 
 nfl["time_of_play"] = time_of_play
 
+#Get only 3rd and 4th down data
 nfl_pbp = nfl[nfl['down'] >=3]
 
 ### Average time of run, pass
@@ -47,9 +43,10 @@ for i in range(15):
 
 # nonparametric smooth
 runtime_nonparam = nonparam_smooth(run_play_time.copy(), window=13)
-print("run times")
-print(run_play_time)
-print(runtime_nonparam)
+
+runtime_df = pd.DataFrame(runtime_nonparam)
+# send run play time calculations to csv to access in R
+runtime_df.to_csv(r'/Users/EthanLee/nfl-runpass/runtime.csv')
 
 # getting average time of pass plays
 pass_plays = nfl_pbp[nfl_pbp['play_type']=='pass']
@@ -63,6 +60,7 @@ for i in range(20):
 
 # nonparametric smooth
 passtime_nonparam = nonparam_smooth(pass_play_time.copy(), window=13)
-print("pass times")
-print(pass_play_time)
-print(passtime_nonparam)
+
+passtime_df = pd.DataFrame(passtime_nonparam)
+# send pass play time calculations to csv to access in R
+passtime_df.to_csv(r'/Users/EthanLee/nfl-runpass/passtime.csv')
