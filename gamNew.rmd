@@ -3,7 +3,8 @@ Making new model:
 This code fits a logistic generalized linear regression model. 
 ```{r}
 library(mgcv)
-nfldata <- read.csv("nflmodeldatafirst.csv")
+data <- read.csv("nflmodeldatafirst.csv")
+nfldata <- data[data$ydstogo == 10,]
 nfldata$margin_time_ratio <- nfldata$margin/(nfldata$game_seconds_remaining + 1)
 
 set.seed(143)
@@ -12,7 +13,7 @@ test.id = sample(seq(1,nrow(nfldata), 1), floor(nrow(nfldata)*0.3))
 nfldata_test = nfldata[test.id,]
 nfldata_train = nfldata[-test.id,]
 
-logitmodel <- glm(posteam_won ~ margin + game_seconds_remaining + yardline_100 + margin_time_ratio, data = nfldata, family = "binomial")
+logitmodel <- glm(posteam_won ~ margin + game_seconds_remaining + margin_time_ratio + yardline_100, data = nfldata, family = "binomial")
 
 RMSE = function(y,yhat){
   SSE = sum((y-yhat)^2, na.rm = T) 
@@ -32,6 +33,7 @@ This code fits a GAM to predict the probability that a team in possession in a f
 ```{r}
 library(mgcv)
 nfldata$margin_time_ratio <- nfldata$margin/(nfldata$game_seconds_remaining + 1)
+nfldata$half_ind <- nfldata$game_seconds_remaining > 1800
 
 set.seed(143)
 
@@ -40,11 +42,6 @@ nfldata_test = nfldata[test.id,]
 nfldata_train = nfldata[-test.id,]
 
 model <- mgcv::bam(posteam_won ~ s(margin) + s(game_seconds_remaining) + s(margin_time_ratio) + s(yardline_100), data = nfldata_train, family = "binomial")
-
-RMSE = function(y,yhat){
-  SSE = sum((y-yhat)^2, na.rm = T) 
-  return(sqrt(SSE/length(y)))
-}
 
 summary(model)
 
@@ -171,28 +168,33 @@ f <- function(ydline, ydstogo, margin_curr, time_left){
   pick_six_wp <- mgcv::predict.bam(model, newdata = x_pick_six, type = "response")[1]
   
   predictions[4] = pass_prob[ydstogo]*(pass_success_wp)+(1-pass_prob[ydstogo] - intercept_probs[ydline])*(pass_fail_wp) + intercept_probs[ydline]*pass_intercept_wp + intercept_td_probs[ydline]*pick_six_wp
-
-  print(predictions)
-  return(which.max(predictions))
+  
+  if(max(predictions) - max(predictions[-which.max(predictions)]) >= 0.005){
+    return(which.max(predictions))
+  }
+  else{
+    return(which.max(predictions) + 5)
+  }
 }
 ```
 
 Testing a few values out for sanity check:
 ```{r}
-f(90, 8, -7, 300)
-f(40, 14, -7, 300)
-f(39, 7, 7, 300)
-f(40, 9, 7, 300)
+
+f(40, 5, -7, 300)
+f(40, 5, -7, 600)
+f(25, 6, 7, 300)
+f(25, 6, 7, 600)
 ```
 
-Generate heatmap of decision suggestions:
+Upgraded heatmap:
 ```{r}
 test <- c()
 for(ydline in 1:99){
   for(ydtogo in 1:15){
     print(ydline)
     print(ydtogo)
-    test = c(test, f(ydline, ydtogo, -7, 1200))
+    test = c(test, f(ydline, ydtogo, 7, 300))
   }
 }
 
@@ -209,7 +211,54 @@ for(i in 1:99){
 }
 testReverted <- as.numeric(testMat)
 
-library(reshape2); library(ggplot2)
+library(ggplot2)
+
+col <- c("red", "blue", "green", "yellow", "black", "#ffcccb", "#add8e6", "#90ee90", "#ffffcc")
+colnames(testMat) <- seq(1, 99, by = 1)
+df <- data.frame(ydtogo = rep(1:15, 99), ydline = rep(99:1, each = 15), decision = testReverted)
+p<-ggplot(df,aes(x=max(ydline)+1-ydline,y=ydtogo))+
+    #tile layer
+    geom_tile(aes(fill=factor(decision))) +
+    #setting the color
+    scale_fill_manual(
+        "Play Type",
+        values=col,
+        breaks=c("1","2","3","4","5", "6", "7", "8", "9"),
+        labels=c("Punt (strong)","Field Goal (strong)", "Run (strong)", "Pass (strong)","Impossible", "Punt (weak)", "Field Goal (weak)", "Run (weak)", "Pass (weak)")) +
+    scale_y_reverse() +
+    ggtitle("NFL Fourth Down, 5 Min. Remaining \n and Score Margin +7") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    xlab("Yardline") + 
+    ylab("Yards to Go")
+
+p
+```
+
+Generate heatmap of decision suggestions:
+```{r}
+test <- c()
+for(ydline in 1:99){
+  for(ydtogo in 1:15){
+    print(ydline)
+    print(ydtogo)
+    test = c(test, f(ydline, ydtogo, -7, 1700))
+  }
+}
+
+testMat <- matrix(test, nrow = 15)
+for(i in 1:99){
+  for(j in 1:15){
+    if(i < j){
+      testMat[j, i] = 5
+    }
+    if((10-j)+i>99){
+      testMat[j, i] = 5
+    }
+  }
+}
+testReverted <- as.numeric(testMat)
+
+library(ggplot2)
 
 col <- c("red", "blue", "green", "yellow", "white")
 colnames(testMat) <- seq(1, 99, by = 1)
@@ -222,9 +271,9 @@ p<-ggplot(df,aes(x=max(ydline)+1-ydline,y=ydtogo))+
         "Play Type",
         values=col,
         breaks=c("1","2","3","4","5"),
-        labels=c("Punt","Field Goal", "Run", "Pass","Impossible")) +
+        labels=c("Punt","Field Goal", "Run", "Pass", "Impossible")) +
     scale_y_reverse() +
-    ggtitle("NFL Fourth Down, 20 Min. Remaining \n and Score Margin -7") +
+    ggtitle("NFL Fourth Down, ~30 Min. Remaining \n and Score Margin -7") +
     theme(plot.title = element_text(hjust = 0.5)) +
     xlab("Yardline") + 
     ylab("Yards to Go")
