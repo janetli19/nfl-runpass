@@ -36,9 +36,14 @@ def get_decisions(nfl_pbp, max_ytg=21):
 
     # expected value of 1st down given yardline
     plays = nfl_pbp[nfl_pbp['down'] == 1]
-    firstDown_pts = {}
+    firstDown_pts = np.zeros(99)
     for yds in range(1,100):
-        firstDown_pts[yds] = np.mean(plays[plays.yardline_100 == yds].next_score_relative_to_posteam)
+        firstDown_pts[yds-1] = np.mean(plays[plays.yardline_100 == yds].next_score_relative_to_posteam)
+    
+    # nonparametric smooth
+    pts_nonparam = nonparam_smooth(firstDown_pts.copy(), window=21)
+    firstDown_pts = dict(zip(range(1,100), pts_nonparam))
+
 
     ## Expected points from touchdown
 
@@ -67,16 +72,29 @@ def get_decisions(nfl_pbp, max_ytg=21):
         firstDown_prob = np.zeros(max_ytg-1)
         for ytg in range(1, max_ytg):
             firstDown_prob[ytg-1] = np.mean(plays.yards_gained[plays.ydstogo == ytg] >= ytg)
-
-        # piecewise polynomial smooth
+        # polynomial smooth
         firstDown_poly = poly_smooth(np.arange(1,max_ytg), firstDown_prob.copy(), deg=3)[0]
         firstDown_prob = dict(zip(range(1,max_ytg), firstDown_poly))
 
-        # # cost of turnover given yardline
-        # firstDown_cost = {}
-        # for yds in range(1,100):
-        #     firstDown_cost[yds] = -1 * firstDown_pts[100-yds]
-
+        # calculate average yards gained on failed play_type, given yardline and yards to go
+        firstDown_yds = {}
+        for yardline in range(1,100):
+            avg_yds = np.zeros(max_ytg-1)
+            for ytg in range(1,max_ytg):
+                avg_yds[ytg-1] = np.mean(plays[((plays.yardline_100 == yardline) & (plays.ydstogo == ytg) & (plays.yards_gained < ytg))].yards_gained)
+                if avg_yds[ytg-1] != avg_yds[ytg-1]: # avg_yds is NaN
+                    avg_yds[ytg-1] = 0                
+            # polynomial smooth
+            avg_yds_poly = poly_smooth(np.arange(1,max_ytg), avg_yds.copy(), deg=3)[0]
+            firstDown_yds[yardline] = dict(zip(range(1,max_ytg), avg_yds_poly))
+        
+        # cost of turnover given yardline and yards to go
+        firstDown_cost = {}
+        for yardline in range(1,100):
+            firstDown_cost[yardline] = {}
+            for ytg in range(1,max_ytg):
+                opp_yardline = min(99, max(1, 100 - yardline + int(firstDown_yds[yardline][ytg]))) # must be int between 1 and 99
+                firstDown_cost[yardline][ytg] = -1 * firstDown_pts[opp_yardline]
 
         if play_type == 'pass':
             # probability of interception at each yardline, and average yards gained
@@ -91,23 +109,19 @@ def get_decisions(nfl_pbp, max_ytg=21):
                     intercept_returns[i] = 0
                 else:
                     intercept_returns[i] = np.mean(ydline[(ydline.interception == 1)].air_yards - ydline[(ydline.interception == 1)].return_yards)
-            # non-parametric smooth
-            intercept_prob_nonparam = nonparam_smooth(intercept_probs.copy(), window=21)
-            intercept_prob_nonparam[intercept_prob_nonparam < 0] = 0
-            intercept_prob_nonparam[intercept_prob_nonparam > 1] = 1
-            intercept_td_prob_nonparam = nonparam_smooth(intercept_td_probs.copy(), window=21)
-            intercept_td_prob_nonparam[intercept_td_prob_nonparam < 0] = 0
-            intercept_td_prob_nonparam[intercept_td_prob_nonparam > 1] = 1
-            intercept_return_nonparam = nonparam_smooth(intercept_returns.copy(), window=21)
+            # smoothing
+            intercept_prob_nonparam = nonparam_smooth(intercept_probs.copy(), window=27)
+            intercept_td_prob_nonparam = nonparam_smooth(intercept_td_probs.copy(), window=27)
+            intercept_returns_nonparam = nonparam_smooth(intercept_returns.copy(), window=31)
             intercept_prob = dict(zip(range(1,100),intercept_prob_nonparam))
             intercept_td_prob = dict(zip(range(1,100),intercept_td_prob_nonparam))
-            intercept_return = dict(zip(range(1,100),intercept_return_nonparam))
+            intercept_returns = dict(zip(range(1,100),intercept_returns_nonparam))
 
         # average cost of interception at each yardline
         interception = {}
         for yardline in range(1,100):
             if play_type == 'pass':
-                opp_yardline = max(99, min(1, 100 - yardline + int(intercept_return[yardline])))
+                opp_yardline = max(99, min(1, 100 - yardline + int(intercept_returns[yardline])))
                 interception[yardline] = -1 * (intercept_td_prob[yardline] * td_pts + intercept_prob[yardline] * firstDown_pts[opp_yardline])
             else:
                 interception[yardline] = 0
@@ -118,20 +132,10 @@ def get_decisions(nfl_pbp, max_ytg=21):
             yardline_value = {}
             for ytg in range(1, max_ytg):
                 if yardline >= ytg and yardline-ytg < 90:
-                    # cost of turnover given yardline
-                    # calculate average yards gained on failed play_type, given yardline and yards to go
-                    avg_yds = np.mean(plays[((plays.yardline_100 == yardline) & (plays.ydstogo == ytg) & (plays.yards_gained < ytg))].yards_gained)
-                    if avg_yds != avg_yds: # avg_yards is NaN
-                        print("NAN for", play_type, "play at yardline", yardline, "ytg", ytg)
-                        opp_yardline = 100 - yardline
-                    else:
-                        opp_yardline = min(99, max(1, 100 - yardline + int(avg_yds))) # must be int between 1 and 99
-                    firstDown_cost = -1 * firstDown_pts[opp_yardline]
-                    
                     if yardline == ytg: # score touchdown
-                        yardline_value[ytg] = firstDown_prob[ytg]*td_pts + (1-firstDown_prob[ytg])*firstDown_cost + interception[yardline]
+                        yardline_value[ytg] = firstDown_prob[ytg]*td_pts + (1-firstDown_prob[ytg])*firstDown_cost[yardline][ytg] + interception[yardline]
                     else:
-                        yardline_value[ytg] = firstDown_prob[ytg]*firstDown_pts[yardline-ytg] + (1-firstDown_prob[ytg])*firstDown_cost + interception[yardline]
+                        yardline_value[ytg] = firstDown_prob[ytg]*firstDown_pts[yardline-ytg] + (1-firstDown_prob[ytg])*firstDown_cost[yardline][ytg] + interception[yardline]
             goforit[yardline] = yardline_value
         return goforit
 
