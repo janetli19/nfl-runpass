@@ -1,9 +1,36 @@
 Making new model:
+
+This code fits a logistic generalized linear regression model. 
+```{r}
+library(mgcv)
+nfldata <- read.csv("nflmodeldatafirst.csv")
+nfldata$margin_time_ratio <- nfldata$margin/(nfldata$game_seconds_remaining + 1)
+
+set.seed(143)
+
+test.id = sample(seq(1,nrow(nfldata), 1), floor(nrow(nfldata)*0.3))
+nfldata_test = nfldata[test.id,]
+nfldata_train = nfldata[-test.id,]
+
+logitmodel <- glm(posteam_won ~ margin + game_seconds_remaining + yardline_100 + margin_time_ratio, data = nfldata, family = "binomial")
+
+RMSE = function(y,yhat){
+  SSE = sum((y-yhat)^2, na.rm = T) 
+  return(sqrt(SSE/length(y)))
+}
+
+summary(logitmodel)
+
+RMSE(nfldata_test$posteam_won, predict(logitmodel, newdata = nfldata_test, type = "response"))
+RMSE(nfldata_train$posteam_won, predict(logitmodel, newdata = nfldata_train, type = "response"))
+
+library(MLmetrics)
+print(LogLoss(logitmodel$fitted.values, nfldata_train$posteam_won))
+```
+
 This code fits a GAM to predict the probability that a team in possession in a first & 10 situation wins the game given the current score margin, the time remaining in the game, and the yardline on which they have the ball.
 ```{r}
 library(mgcv)
-data <- read.csv("nflmodeldatafirst.csv")
-nfldata <- data[data$ydstogo == 10,]
 nfldata$margin_time_ratio <- nfldata$margin/(nfldata$game_seconds_remaining + 1)
 
 set.seed(143)
@@ -45,29 +72,6 @@ calibPlot <- function(model, trainData){
 }
 
 calibPlot(model, nfldata_train)
-```
-
-Plot showing win probability model's effectiveness:
-```{r}
-win_prob_prove <- c()
-indices <- seq(0, 1800, by = 5)
-for(i in indices){
-  margin = 7
-  secs = i
-  ydline = 50
-  x <- data.frame("margin" = margin, "game_seconds_remaining" = secs, "margin_time_ratio" = margin/(secs+1), "yardline_100" = ydline)
-  win_prob_prove <- c(win_prob_prove, mgcv::predict.bam(model, newdata = x, type = "response"))
-}
-
-plot(x = indices, y = win_prob_prove, main = "Win Prob. vs. Time \n Ydline = 50, Margin = +1", xlab = "Seconds Remaining", ylab = "Win Probability")
-
-# margin = 7
-# secs = 600
-# ydline = 50
-# x <- data.frame("margin" = margin, "game_seconds_remaining" = secs, "margin_time_ratio" = margin/(secs+1), "yardline_100" = ydline)
-# predicted <- mgcv::predict.bam(model, newdata = x, type = "response")
-# 
-# print(predicted[1])
 ```
 
 Getting punt distance and field goal probability data:

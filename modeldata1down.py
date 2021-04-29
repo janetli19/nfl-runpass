@@ -65,21 +65,5 @@ print(nfl_filtered.shape)
 nfl_filtered_first = nfl_filtered[nfl_filtered['down'] == 1]
 print(nfl_filtered_first.shape)
 
-nfl_filtered_first.to_csv(r'/Users/EthanLee/nfl-runpass/nflmodeldatafirst.csv')
-
-## Failed attempts to make GLM :(
-# pm1 = sm.GLM(noTies.posteam_won, noTies.margin, family=sm.families.Binomial())
-# pm1 = smf.glm('posteam_won ~ margin + game_seconds_remaining', family=sm.families.Binomial(), data=noTies)
-# pfit = pm1.fit()
-# print(pfit.summary())
-
-# Fit Generalized Additive Model: posteam_won ~ expected_margin + time_remaining
-# model_data_X = nfl_final[['game_seconds_remaining', 'expected_margin']]
-# model_data_Y = nfl_final[['posteam_won']]
-# gam = GAM(s(0) + s(1), distribution = 'binomial', link = 'identity').fit(model_data_X, model_data_Y)
-# print(gam.summary())
-
-# PFR Win Probability Model (using score margin, expected points added, and time remaining)
-
-# def pfrWinProb(margin, EPA, secs_left):
-#     return 1 - norm.cdf(0, loc = margin + EPA, scale = math.sqrt(13.45*secs_left/3600))
+# send to CSV file
+# nfl_filtered_first.to_csv(r'/Users/EthanLee/nfl-runpass/nflmodeldatafirst.csv')
