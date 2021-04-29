@@ -23,9 +23,31 @@ summary(model)
 
 RMSE(nfldata_test$posteam_won, predict(model, newdata = nfldata_test, type = "response"))
 RMSE(nfldata_train$posteam_won, predict(model, newdata = nfldata_train, type = "response"))
+
+library(MLmetrics)
+print(LogLoss(model$fitted.values, nfldata_train$posteam_won))
 ```
 
+Code for calibration plot:
+```{r}
+calibPlot <- function(model, trainData){
+  trainCopy = trainData
+  trainCopy$predictedVals <- predict(model, newdata = trainData)
+  xPoints = rep(NA, 10)
+  yPoints = rep(NA, 10)
+  for(i in 1:10){
+    xPoints[i] = mean(trainCopy$predictedVals[trainCopy$predictedVals <= 0.1*i & trainCopy$predictedVals >= 0.1*(i-1)], na.rm = TRUE)
+    yPoints[i] = mean(trainCopy$posteam_won[trainCopy$predictedVals <= 0.1*i & trainCopy$predictedVals >= 0.1*(i-1)], na.rm = TRUE)
+  }
+  print(xPoints)
+  print(yPoints)
+  plot(x = xPoints, y = yPoints, main = "Calibration Plot", xlab = "Predicted Probability", ylab = "Actual Proportion of Wins", ylim = c(0, 1))
+}
 
+calibPlot(model, nfldata_train)
+```
+
+Plot showing win probability model's effectiveness:
 ```{r}
 win_prob_prove <- c()
 indices <- seq(0, 1800, by = 5)
@@ -48,89 +70,48 @@ plot(x = indices, y = win_prob_prove, main = "Win Prob. vs. Time \n Ydline = 50,
 # print(predicted[1])
 ```
 
+Getting punt distance and field goal probability data:
 ```{r}
-fg_prob <- c(0.98800242, 0.9873583,  0.98599963, 0.98392644, 0.9811387,  0.97763643,
- 0.97341963, 0.96848829, 0.96284241, 0.956482,   0.94940705, 0.94103738,
- 0.93370957, 0.9242918,  0.91607366, 0.90705404, 0.89110836, 0.88207813,
- 0.86965501, 0.86092923, 0.84712799, 0.83384908, 0.8178289,  0.80999701,
- 0.79376074, 0.78583387, 0.77255554, 0.75270675, 0.74333302, 0.73419326,
- 0.71489071, 0.69695817, 0.68173526, 0.66772373, 0.63855625, 0.5953817,
- 0.58327118, 0.56314188, 0.53097528, 0.492813,  0.4443912,  0.3956127,
- 0.3437673,  0.29433238, 0.23839377, 0.19436514, 0.14815106, 0.10367735,
- 0.07805278, 0.04877408, 0.01999607, 0.00185713, 0,         0,
- 0,         0,         0,         0,         0,         0,
- 0,         0,         0,         0,         0,         0,
- 0,         0,         0,         0,         0,         0,
- 0,        0,         0,         0,         0,         0,
- 0,         0,         0,        0,         0,         0,
- 0,         0,         0,       0,         0,        0,
- 0,        0,        0,         0,        0,         0,
- 0,        0,         0)
-  
-run_prob <- c(0.66517814, 0.6114814,  0.55893096, 0.50774364, 0.45813627, 0.41032565,
- 0.36452863, 0.320962,   0.27984261, 0.24138727, 0.2058128,  0.17333602,
- 0.14417376, 0.11854284, 0.09666007, 0.07874229, 0.06500631, 0.05566895,
- 0.05094704, 0.0510574)
-  
-pass_prob <- c(0.56292782, 0.53162334, 0.50022819, 0.46887784, 0.43770777, 0.40685347,
- 0.37645042, 0.3466341,  0.31753999, 0.28930358, 0.26206034, 0.23594576,
- 0.21109532, 0.18764451, 0.1657288,  0.14548367, 0.12704462, 0.11054711,
- 0.09612664, 0.08391869)
+punt_fg_data <- read.csv("punt_fg_probs.csv")
+fg_prob <- punt_fg_data$fg
+punt_dist <- punt_fg_data$punt
 
-punt_dist <- c(NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 21.0, 26.5, 22.4, 24.88888888888889, 24.429193899782135, 26.46545454545455, 28.542857142857144, 27.91130152848541, 29.436291370480774, 30.610798122065727, 30.971176377314613, 31.211294924818056, 32.243573667711594, 33.320163865117436, 33.58655041028643, 34.50034435261708, 35.02321112406616, 35.61324863883848, 36.076719981633126, 37.68129325782876, 37.21049030029232, 38.40101311953353, 39.26357466063348, 38.96897341449184, 39.13529143897996, 39.98149669335189, 39.85393495393495, 40.836193457466045, 40.95232506967874, 41.29328334204495, 42.23055255008767, 42.76913759890205, 41.988013241988135, 41.49182144020853, 41.10843769396473, 40.9212056199051, 42.445724175376675, 41.87753866088279, 42.80360309001928, 42.0337023657926, 42.16289637459251, 41.957361487795424, 41.3757902670112, 42.284343423176416, 42.01238879736408, 42.01292618353567, 41.69901089601185, 41.45657142857143, 42.180161433448426, 42.08737162263533, 42.38751826002272, 42.82375855805505, 42.721235546107515, 41.87293144208037, 41.513856352057196, 42.88216312056738, 42.68820695433599, 42.44019386410691, 43.09244203553146, 41.92926490984744, 42.57208165397821, 42.77272727272727, 42.62045700778095, 42.6332425892317, 40.905841269841275, 41.660869565217396, 41.84690220174091, 40.98076923076923, 39.99032258064516, 39.88888888888889)
+for(i in 1:length(punt_dist)){
+  if(punt_dist[i] == 0){
+    punt_dist[i] <- NA
+  }
+}
+
+run_prob_data <- read.csv("run_probs.csv")
+run_prob <- run_prob_data$X0
+
+pass_prob_data <- read.csv("pass_probs.csv")
+pass_prob <- pass_prob_data$X0
 ```
 
+Getting runtime and passtime data:
 ```{r}
-run_times <- c(31.3832929,  31.28168727, 31.17007129, 31.04844495, 30.91680825, 30.77516119, 30.62350376, 30.4025587,  30.16752842, 29.97576722, 29.78920837, 29.60785187,
- 29.43169773, 29.26074595, 29.09499652)
-
-pass_times <- c(18.97991414, 19.16840405, 19.37381944, 19.59616029, 19.83542663, 20.09161843, 20.36473571, 20.53591371, 20.94282281, 21.12593186, 21.31099117, 21.63941815,
- 22.03776753, 22.60565005, 22.81537369, 22.95953884, 23.03814551, 23.05119369,
- 22.99868339, 22.88061461)
+run_time_data <- read.csv("runtime.csv")
+pass_time_data <- read.csv("passtime.csv")
+run_times <- run_time_data$X0
+pass_times <- pass_time_data$X0
 ```
 
+Getting interception probability, pick six probability, and interception return yards:
 ```{r}
-intercept_probs <- c(0.00569923, 0.00651411, 0.00726134, 0.00794093, 0.00855289, 0.00909721,
- 0.00957388, 0.00998292, 0.01032433, 0.01059809, 0.01080422, 0.0106787,
- 0.01015682, 0.00996997, 0.01006718, 0.01007537, 0.0100791,  0.01012893,
- 0.01000475, 0.0107135,  0.0109427,  0.01111905, 0.01113655, 0.01098566,
- 0.0117084,  0.01099531, 0.01079791, 0.01069332, 0.01067245, 0.01044697,
- 0.01030679, 0.01025028, 0.01045664, 0.01041501, 0.01037227, 0.01055153,
- 0.01076658, 0.01137541, 0.01166113, 0.01241524, 0.01232431, 0.01271655,
- 0.01267973, 0.01312231, 0.01327066, 0.012629,   0.01240721, 0.01254595,
- 0.0122914,  0.01210165, 0.01165898, 0.01167488, 0.01180104, 0.01175292,
- 0.01175961, 0.01195331, 0.01186046, 0.01174058, 0.01156598, 0.01180763,
- 0.01159898, 0.01157611, 0.01156782, 0.01178851, 0.01153871, 0.01154731,
- 0.01142662, 0.0114625,  0.01142402, 0.01142278, 0.01146739, 0.01191271,
- 0.01229382, 0.01250622, 0.01243652, 0.01249077, 0.01215551, 0.01187874,
- 0.01189424, 0.01167392, 0.01109884, 0.01142869, 0.01132212, 0.01121723,
- 0.01135781, 0.01107954, 0.01099973, 0.01040785, 0.01010657, 0.01034149,
- 0.01067062, 0.01109397, 0.01161153, 0.01222331, 0.0129293,  0.0137295,
- 0.01462392, 0.01561255, 0.0166954)
-
-# intercept return yards in perspective of intercepting team
-intercept_return <- c(10.83525475,  10.88967349,  10.88679935,  10.82663235,  10.70917247,
-  10.53441973,  10.30237412,  10.01303564,   9.66640429,   9.26248007,
-   8.80126298,   7.63600453,   7.7462759,    7.09208044,   6.05828007,
-   5.49845458,   5.11752603,   4.3187749,    4.07395711,   3.12387414,
-   2.64795377,   2.88327761,   2.54274586,   2.04701588,   1.79616937,
-   2.02643173,   2.02527999,   1.11550794,   0.09747351,  -0.03802388,
-  -0.4436096,   -0.67208605,  -0.18973101,  -0.86763903,  -0.97220473,
-  -1.04367002,  -1.16630274,  -1.54383041,  -2.48000818,  -3.15715364,
-  -3.26491675,  -3.10882869,  -3.49152201,  -4.23898493,  -3.98207611,
-  -3.69336334,  -3.46013845,  -4.07136244,  -4.08387798,  -3.49552253,
-  -2.90054243,  -2.42387344,  -2.19294661, -2.02107508,  -1.59695243,
-  -2.12374061,  -2.15033823,  -2.19099836,  -2.01644503,  -2.29209705,
-  -2.18124137,  -2.45298969,  -3.15371363,  -3.05475143,  -2.75187633,
-  -2.42733649,  -2.85080233,  -2.829637,    -2.35200588,  -1.52618883,
-  -1.01713291,  -0.95309764,  -1.06323758,  -1.59632806,  -1.78445449,
-  -2.0645223,   -2.41554972,  -2.5685204,   -2.79491288,  -3.25745384,
-  -4.04313729,  -5.31218375,  -5.86697794,  -5.95651733,  -6.49456986,
-  -6.55368499,  -7.40266547,  -7.54532613,  -8.35894026,  -8.78343656,
-  -9.20820388,  -9.63324221, -10.05855157, -10.48413194, -10.90998334,
- -11.33610576, -11.76249919, -12.18916365, -12.61609912)
+intercept_calcs <- read.csv("intercept_probs.csv")
+intercept_probs <- intercept_calcs$prob
+intercept_td_probs <- intercept_calcs$td_prob
+intercept_return <- intercept_calcs$return
 ```
 
+Getting yards gained on failed pass/run attempts:
+```{r}
+pass_fail_yds_data <- read.csv("pass_fails.csv")
+run_fail_yds_data <- read.csv("run_fails.csv")
+```
+
+Function for generating which action a team should take on fourth down when considering win probability:
 ```{r}
 f <- function(ydline, ydstogo, margin_curr, time_left){
   predictions <- c(0, 0, 0, 0)
@@ -161,7 +142,8 @@ f <- function(ydline, ydstogo, margin_curr, time_left){
     x_run_success <- data.frame("margin" = margin_curr, "game_seconds_remaining" = time_left - run_times[ydstogo], "margin_time_ratio" = (margin_curr)/(time_left - run_times[ydstogo]+1), "yardline_100" = ydline-ydstogo)
     run_success_wp <- mgcv::predict.bam(model, newdata = x_run_success, type = "response")[1]
   }
-  x_run_fail <- data.frame("margin" = -margin_curr, "game_seconds_remaining" = time_left - run_times[ydstogo], "margin_time_ratio" = (-margin_curr)/(time_left - run_times[ydstogo]+1), "yardline_100" = 100-ydline)
+  
+  x_run_fail <- data.frame("margin" = -margin_curr, "game_seconds_remaining" = time_left - run_times[ydstogo], "margin_time_ratio" = (-margin_curr)/(time_left - run_times[ydstogo]+1), "yardline_100" = 100-(ydline - run_fail_yds_data[ydstogo, ydline+1]))
   run_fail_wp <- 1-mgcv::predict.bam(model, newdata = x_run_fail, type = "response")[1]
 
   predictions[3] = run_prob[ydstogo]*(run_success_wp)+(1-run_prob[ydstogo])*(run_fail_wp)
@@ -175,30 +157,31 @@ f <- function(ydline, ydstogo, margin_curr, time_left){
     x_pass_success <- data.frame("margin" = margin_curr, "game_seconds_remaining" = time_left- pass_times[ydstogo], "margin_time_ratio" = (margin_curr)/(time_left- pass_times[ydstogo]+1), "yardline_100" = ydline-ydstogo)
     pass_success_wp <- mgcv::predict.bam(model, newdata = x_pass_success, type = "response")[1]
   }
-  x_pass_fail <- data.frame("margin" = -margin_curr, "game_seconds_remaining" = time_left- pass_times[ydstogo], "margin_time_ratio" = (-margin_curr)/(time_left- pass_times[ydstogo]+1), "yardline_100" = 100-ydline)
+  x_pass_fail <- data.frame("margin" = -margin_curr, "game_seconds_remaining" = time_left- pass_times[ydstogo], "margin_time_ratio" = (-margin_curr)/(time_left- pass_times[ydstogo]+1), "yardline_100" = 100-(ydline - pass_fail_yds_data[ydstogo, ydline+1]))
   pass_fail_wp <- 1-mgcv::predict.bam(model, newdata = x_pass_fail, type = "response")[1]
   
   x_pass_intercept <- data.frame("margin" = -margin_curr, "game_seconds_remaining" = time_left- pass_times[ydstogo], "margin_time_ratio" = (-margin_curr)/(time_left- pass_times[ydstogo]+1), "yardline_100" = max(min(100-ydline - intercept_return[ydline], 99), 1))
   pass_intercept_wp <- 1-mgcv::predict.bam(model, newdata = x_pass_intercept, type = "response")[1]
   
-  predictions[4] = pass_prob[ydstogo]*(pass_success_wp)+(1-pass_prob[ydstogo] - intercept_probs[ydline])*(pass_fail_wp) + intercept_probs[ydline]*pass_intercept_wp
+  x_pick_six <- data.frame("margin" = margin_curr - 6.970960661826777, "game_seconds_remaining" = time_left- pass_times[ydstogo], "margin_time_ratio" = (margin_curr - 6.970960661826777)/(time_left- pass_times[ydstogo]+1), "yardline_100" = 75)
+  pick_six_wp <- mgcv::predict.bam(model, newdata = x_pick_six, type = "response")[1]
+  
+  predictions[4] = pass_prob[ydstogo]*(pass_success_wp)+(1-pass_prob[ydstogo] - intercept_probs[ydline])*(pass_fail_wp) + intercept_probs[ydline]*pass_intercept_wp + intercept_td_probs[ydline]*pick_six_wp
 
+  print(predictions)
   return(which.max(predictions))
 }
 ```
 
-
--improvement: relax the assumption that the other team gets the ball at the exact yard line, assume they get more yardage by running or passing
--4th down -> design good plays, so use data from both 3rd and 4th down data
--have some distribution of the final yard line for run and pass separately
-  -prediction of how much farther past the 1st down they'll go
+Testing a few values out for sanity check:
 ```{r}
-f(90, 8, -7, 1700)
-f(50, 8, -7, 1200)
-f(69, 6, 7, 1700)
-f(40, 8, 7, 1200)
+f(90, 8, -7, 300)
+f(40, 14, -7, 300)
+f(39, 7, 7, 300)
+f(40, 9, 7, 300)
 ```
 
+Generate heatmap of decision suggestions:
 ```{r}
 test <- c()
 for(ydline in 1:99){

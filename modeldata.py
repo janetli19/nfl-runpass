@@ -24,12 +24,14 @@ def poly_smooth(x,y,deg):
 DATADIR = '/Users/EthanLee/Desktop/STAT 143/'
 nfl = pd.read_csv(DATADIR + 'NFL_PbP_2009_2018_4thDownAnalysis.csv')
 
+# only look at third and fourth down data
 nfl_pbp = nfl[nfl['down'] >=3]
 
-# Remove overtime plays
+# Remove overtime plays (our model will only consider regular time remaining)
 nfl_pbp_prefiltered = nfl_pbp[nfl_pbp['game_half'] != "Overtime"]
 
-# Code for getting posteam_won, indicator of whether team with possession won
+## Code for getting posteam_won, indicator of whether team with possession won
+# first, get the winner of every game by id and store in 'winners'
 winners = {}
 uniqueGames = set(nfl_pbp_prefiltered['game_id'])
 for game in uniqueGames:
@@ -42,6 +44,7 @@ for game in uniqueGames:
     else:
         winners[game] = "TIE"
 
+# next, calculate posteam_won and the score margin for each play
 posteam_won = []
 margins = []
 for i in range(len(nfl_pbp_prefiltered)):
@@ -57,26 +60,13 @@ for i in range(len(nfl_pbp_prefiltered)):
 nfl_pbp_prefiltered["posteam_won"] = posteam_won
 nfl_pbp_prefiltered["margin"] = margins
 
-# Remove all ties
+# Remove all ties (this allows us to strictly have a binary indicator of whether or not a team won
 nfl_filtered = nfl_pbp_prefiltered[nfl_pbp_prefiltered['posteam_won'] != -1]
-print(nfl_filtered.shape)
 
-# Get only fourth down -> necessary b/c atm we have expected points calculator for fourth down only
-nfl_filtered_fourth = nfl_filtered[nfl_filtered['down'] == 4]
-print(nfl_filtered_fourth.shape)
+# Store the filtered data as a CSV file to be accessed in R when training the models
+# nfl_filtered.to_csv(r'/Users/EthanLee/nfl-runpass/nflmodeldata.csv')
 
-### Basically ctrl+c ctrl+v the expected points calculator functions
-
-# expected value of 1st down given yardline
-plays = nfl_pbp[nfl_pbp['down'] == 1]
-firstDown_pts = {}
-for yds in range(1,100):
-    firstDown_pts[yds] = np.mean(plays[plays.yardline_100 == yds].next_score_relative_to_posteam)
-
-# cost of turnover given yardline
-firstDown_cost = {}
-for yds in range(1,100):
-    firstDown_cost[yds] = -1 * firstDown_pts[100-yds]
+### Some additional code to calculate the probabilities of success for different actions and other necessary numbers
 
 ## Expected points from touchdown
 
@@ -90,46 +80,11 @@ one_pt_success = np.mean(nfl[nfl.extra_point_attempt == 1].extra_point_result ==
 two_pt_success = np.mean(nfl[nfl.two_point_attempt == 1].two_point_conv_result == 'success')
 
 extra_pts = one_pt_prob * one_pt_success + 2 * (1 - one_pt_prob) * two_pt_success
+
+# This value was manually copied into the R code as the expected value of extra points added on to a touchdown
 print(extra_pts)
 
-# expected points from touchdown
-kickoff_dist = 75 # average starting position after kickoff
-td_pts = 6 + extra_pts - firstDown_pts[kickoff_dist]
-
-def get_firstdown(play_type, max_ytg=21):
-    """
-    Return dict of expected values of going for it, given yardline and yards to go
-    """
-    plays = nfl_pbp[nfl_pbp.play_type == play_type]
-
-    # probability of 1st down given yards to go
-    firstDown_prob = np.zeros(max_ytg-1)
-    for ytg in range(1, max_ytg):
-        firstDown_prob[ytg-1] = np.mean(plays.yards_gained[plays.ydstogo == ytg] >= ytg)
-
-    # piecewise polynomial smooth
-    firstDown_poly = poly_smooth(np.arange(1,max_ytg), firstDown_prob.copy(), deg=3)[0]
-    print(play_type)
-    print(firstDown_poly)
-    firstDown_prob = dict(zip(range(1,max_ytg), firstDown_poly))
-
-    # expected value of going for it, given yardline and yards to go
-    goforit = {}
-    for yardline in range(1, 100):
-        yardline_value = {}
-        for ytg in range(1, max_ytg):
-            if yardline == ytg: # score touchdown
-                yardline_value[ytg] = firstDown_prob[ytg]*td_pts + (1-firstDown_prob[ytg])*firstDown_cost[yardline]
-            elif yardline > ytg:
-                yardline_value[ytg] = firstDown_prob[ytg]*firstDown_pts[yardline-ytg] + (1-firstDown_prob[ytg])*firstDown_cost[yardline]
-        goforit[yardline] = yardline_value
-    return goforit
-
-run_play = get_firstdown('run')
-pass_play = get_firstdown('pass')
-
-
-### Field goal
+## find probability of field goal success using our 3rd/4th down data
 
 # probability of field goal given yardline
 plays = nfl_pbp[nfl_pbp['field_goal_attempt']==1]
@@ -144,105 +99,96 @@ for i in range(50): # prob of field goal at any field position >= 50 is set to 0
 fg_nonparam = nonparam_smooth(fg_prob.copy(), window=21)
 fg_nonparam[fg_nonparam < 0] = 0
 fg_nonparam[fg_nonparam > 1] = 1
-print("field goal")
-print(fg_nonparam)
-fg_prob = dict(zip(range(1,100),fg_nonparam))
 
-# expected value of field goal given field position
-fg = {}
-fg_value = 3 - firstDown_pts[kickoff_dist] # value of field goal
-for yds in range(1, 100):
-    if yds < 92: # max field position for field goal is 92
-        fg[yds] = fg_prob[yds]*fg_value - (1-fg_prob[yds])*firstDown_pts[min(80, 100-(yds+8))]
-    else:
-        fg[yds] = -10 # small value that will never be chosen
+## find the expected punt distance given yardline, using our 3rd/4th down data
 
-
-### Punt
-
-# expected value of punt given field position
 plays = nfl_pbp[nfl_pbp.play_type == "punt"]
-punt = {}
 punt_dists = []
 for yds in range(1, 100):
     punt_dist = np.mean(plays[plays.yardline_100==yds].kick_distance) - np.mean(plays[plays.yardline_100==yds].return_yards)
-    punt_dists.append(punt_dist)
-    if punt_dist != punt_dist: # if nan, then touchback
-        punt[yds] = -1 * firstDown_pts[80]
+    if punt_dist != punt_dist:
+        punt_dists.append(0)
     else:
-        punt[yds] = -1 * firstDown_pts[min(round(100-yds+punt_dist), 80)]
-print("punt")
-print(punt_dists)
+        punt_dists.append(punt_dist)
 
-# print(fg)
-# print(fg.values())
-# print(punt)
-# print(punt.values())
+punt_fg_probs = {'punt': punt_dists, 'fg': fg_nonparam}
+punt_fg_probs_df = pd.DataFrame(punt_fg_probs)
+
+# send fg prob and punt distance calculations to csv to access in R
+# punt_fg_probs_df.to_csv(r'/Users/EthanLee/nfl-runpass/punt_fg_probs.csv')
+
+## find the probability of success for run and pass plays, as well as yards gained on failed plays and interception probabilities
+
+def failed_yds(play_type, max_ytg = 21):
+
+    plays = nfl_pbp[nfl_pbp.play_type == play_type]
+
+    # probability of 1st down given yards to go
+    firstDown_prob = np.zeros(max_ytg-1)
+    for ytg in range(1, max_ytg):
+        firstDown_prob[ytg-1] = np.mean(plays.yards_gained[plays.ydstogo == ytg] >= ytg)
+
+    # piecewise polynomial smooth
+    firstDown_poly = poly_smooth(np.arange(1,max_ytg), firstDown_prob.copy(), deg=3)[0]
+
+    if play_type == 'run':
+        run_probs_df = pd.DataFrame(firstDown_poly)
+        # send run prob calculations to csv to access in R
+        run_probs_df.to_csv(r'/Users/EthanLee/nfl-runpass/run_probs.csv')
+    else:
+        pass_probs_df = pd.DataFrame(firstDown_poly)
+        # send pass prob calculations to csv to access in R
+        pass_probs_df.to_csv(r'/Users/EthanLee/nfl-runpass/pass_probs.csv')
+
+    if play_type == 'pass':
+        # probability of interception at each yardline, and average yards gained
+        intercept_probs = np.zeros(99) # probability of interception (not pick 6)
+        intercept_td_probs = np.zeros(99) # probability of pick 6
+        intercept_returns = np.zeros(99) # yards gained in return
+        for i in range(99):
+            ydline = plays[(plays.yardline_100 == i+1)]
+            intercept_td_probs[i] = np.mean((ydline.interception == 1) & (ydline.touchdown == 1))
+            intercept_probs[i] = np.mean((ydline.interception == 1) & (ydline.touchdown == 0))
+            if sum(ydline.interception == 1) == 0:
+                intercept_returns[i] = 0
+            else:
+                intercept_returns[i] = np.mean(ydline[(ydline.interception == 1)].air_yards - ydline[(ydline.interception == 1)].return_yards)
+        # non-parametric smooth
+        intercept_prob_nonparam = nonparam_smooth(intercept_probs.copy(), window=21)
+        intercept_prob_nonparam[intercept_prob_nonparam < 0] = 0
+        intercept_prob_nonparam[intercept_prob_nonparam > 1] = 1
+        intercept_td_prob_nonparam = nonparam_smooth(intercept_td_probs.copy(), window=21)
+        intercept_td_prob_nonparam[intercept_td_prob_nonparam < 0] = 0
+        intercept_td_prob_nonparam[intercept_td_prob_nonparam > 1] = 1
+        intercept_return_nonparam = nonparam_smooth(intercept_returns.copy(), window=21)
+
+        intercept_probs = {'prob': intercept_prob_nonparam, 'td_prob': intercept_td_prob_nonparam, 'return': intercept_return_nonparam}
+        intercept_probs_df = pd.DataFrame(intercept_probs)
+
+        # send interception calculations to csv to access in R
+        # intercept_probs_df.to_csv(r'/Users/EthanLee/nfl-runpass/intercept_probs.csv')
+
+    # calculate average yards gained on failed play_type, given yardline and yards to go
+    avg_fail_yds = {}
+    for yardline in range(1, 100):
+        avg_fail_yds_yardline = {}
+        for ytg in range(1, max_ytg):
+            if yardline >= ytg and yardline-ytg < 90:
+                avg_yds = np.mean(plays[((plays.yardline_100 == yardline) & (plays.ydstogo == ytg) & (plays.yards_gained < ytg))].yards_gained)
+                if avg_yds != avg_yds: # avg_yards is NaN
+                    print("NAN for", play_type, "play at yardline", yardline, "ytg", ytg)
+                    avg_yds = 0
+            avg_fail_yds_yardline[ytg] = avg_yds
+        avg_fail_yds[yardline] = avg_fail_yds_yardline
+    return avg_fail_yds
+
+run_play = failed_yds('run')
+pass_play = failed_yds('pass')
 
 ## Turn run_play into CSV to access in R
-for i in run_play.keys():
-    if i < 20:
-        for j in range(i+1, 21):
-            run_play[i][j] = 0
-
-run_play_new = {}
-for i in range(1, 100):
-    run_play_new[i] = run_play[i].values()
-
-run_df = pd.DataFrame(run_play_new)
-# run_df.to_csv(r'/Users/EthanLee/nfl-runpass/rundf.csv')
+run_df = pd.DataFrame(run_play)
+# run_df.to_csv(r'/Users/EthanLee/nfl-runpass/run_fails.csv')
 
 ## Turn pass_play into CSV to access in R
-for i in pass_play.keys():
-    if i < 20:
-        for j in range(i+1, 21):
-            pass_play[i][j] = 0
-
-pass_play_new = {}
-for i in range(1, 100):
-    pass_play_new[i] = pass_play[i].values()
-
-pass_df = pd.DataFrame(pass_play_new)
-# pass_df.to_csv(r'/Users/EthanLee/nfl-runpass/passdf.csv')
-
-## Add new row to nfl_filtered_fourth generating the new expected score difference based on play type
-expected_margin = []
-for index, row in nfl_filtered_fourth.iterrows():
-    if row["play_type"] == "punt":
-        expected_margin.append(row["margin"] + punt[row["yardline_100"]])
-    elif row["play_type"] == "field_goal":
-        expected_margin.append(row["margin"] + fg[row["yardline_100"]])
-    elif row["play_type"] == "run":
-        if row["ydstogo"] < 21:
-            expected_margin.append(row["margin"] + run_play[row["yardline_100"]][row["ydstogo"]])
-        else:
-            expected_margin.append(10000)
-    elif row["play_type"] == "pass":
-        if row["ydstogo"] < 21:
-            expected_margin.append(row["margin"] + pass_play[row["yardline_100"]][row["ydstogo"]])
-        else:
-            expected_margin.append(10000)
-    else:
-        expected_margin.append(10000)
-
-nfl_filtered_fourth["expected_margin"] = expected_margin
-nfl_final = nfl_filtered_fourth[nfl_filtered_fourth["expected_margin"] != 10000]
-
-nfl_final.to_csv(r'/Users/EthanLee/nfl-runpass/nflmodeldata.csv')
-
-## Failed attempts to make GLM :(
-# pm1 = sm.GLM(noTies.posteam_won, noTies.margin, family=sm.families.Binomial())
-# pm1 = smf.glm('posteam_won ~ margin + game_seconds_remaining', family=sm.families.Binomial(), data=noTies)
-# pfit = pm1.fit()
-# print(pfit.summary())
-
-# Fit Generalized Additive Model: posteam_won ~ expected_margin + time_remaining
-# model_data_X = nfl_final[['game_seconds_remaining', 'expected_margin']]
-# model_data_Y = nfl_final[['posteam_won']]
-# gam = GAM(s(0) + s(1), distribution = 'binomial', link = 'identity').fit(model_data_X, model_data_Y)
-# print(gam.summary())
-
-# PFR Win Probability Model (using score margin, expected points added, and time remaining)
-
-# def pfrWinProb(margin, EPA, secs_left):
-#     return 1 - norm.cdf(0, loc = margin + EPA, scale = math.sqrt(13.45*secs_left/3600))
+pass_df = pd.DataFrame(pass_play)
+# pass_df.to_csv(r'/Users/EthanLee/nfl-runpass/pass_fails.csv')
