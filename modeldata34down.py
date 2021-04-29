@@ -171,15 +171,16 @@ def failed_yds(play_type, max_ytg = 21):
     # calculate average yards gained on failed play_type, given yardline and yards to go
     avg_fail_yds = {}
     for yardline in range(1, 100):
-        avg_fail_yds_yardline = {}
+        avg_fail_yds_yardline = np.zeros(max_ytg-1)
         for ytg in range(1, max_ytg):
             if yardline >= ytg and yardline-ytg < 90:
                 avg_yds = np.mean(plays[((plays.yardline_100 == yardline) & (plays.ydstogo == ytg) & (plays.yards_gained < ytg))].yards_gained)
                 if avg_yds != avg_yds: # avg_yards is NaN
                     print("NAN for", play_type, "play at yardline", yardline, "ytg", ytg)
                     avg_yds = 0
-            avg_fail_yds_yardline[ytg] = avg_yds
-        avg_fail_yds[yardline] = avg_fail_yds_yardline
+            avg_fail_yds_yardline[ytg-1] = avg_yds
+        avg_yds_poly = poly_smooth(np.arange(1,max_ytg), avg_fail_yds_yardline.copy(), deg=3)[0]
+        avg_fail_yds[yardline] = avg_yds_poly
     return avg_fail_yds
 
 run_play = failed_yds('run')
@@ -187,8 +188,8 @@ pass_play = failed_yds('pass')
 
 ## Turn run_play into CSV to access in R
 run_df = pd.DataFrame(run_play)
-# run_df.to_csv(r'/Users/EthanLee/nfl-runpass/run_fails.csv')
+run_df.to_csv(r'/Users/EthanLee/nfl-runpass/run_fails.csv')
 
 ## Turn pass_play into CSV to access in R
 pass_df = pd.DataFrame(pass_play)
-# pass_df.to_csv(r'/Users/EthanLee/nfl-runpass/pass_fails.csv')
+pass_df.to_csv(r'/Users/EthanLee/nfl-runpass/pass_fails.csv')
