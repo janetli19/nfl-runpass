@@ -58,6 +58,9 @@ calibPlot <- function(model, trainData){
 
 calibPlot(model, nfldata_train)
 
+# Model assumptions
+gam.check(model)
+
 ### Getting punt distance and field goal probability data
 punt_fg_data <- read.csv("datasets/punt_fg_probs.csv")
 fg_prob <- punt_fg_data$fg
