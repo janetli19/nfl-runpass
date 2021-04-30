@@ -21,7 +21,7 @@ def poly_smooth(x,y,deg):
     return yp,pfit,cov
 
 # load data
-DATADIR = '/Users/EthanLee/Desktop/STAT 143/'
+DATADIR = '    '
 nfl_pbp = pd.read_csv(DATADIR + 'NFL_PbP_2009_2018_4thDownAnalysis.csv')
 print(nfl_pbp.shape)
 

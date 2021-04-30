@@ -21,7 +21,7 @@ def poly_smooth(x,y,deg):
     return yp,pfit,cov
 
 # load data
-DATADIR = '/Users/EthanLee/Desktop/STAT 143/'
+DATADIR = '    '
 nfl = pd.read_csv(DATADIR + 'NFL_PbP_2009_2018_4thDownAnalysis.csv')
 
 # only look at third and fourth down data
@@ -134,11 +134,11 @@ def failed_yds(play_type, max_ytg = 21):
     if play_type == 'run':
         run_probs_df = pd.DataFrame(firstDown_poly)
         # send run prob calculations to csv to access in R
-        run_probs_df.to_csv(r'/Users/EthanLee/nfl-runpass/run_probs.csv')
+        # run_probs_df.to_csv(r'/Users/EthanLee/nfl-runpass/run_probs.csv')
     else:
         pass_probs_df = pd.DataFrame(firstDown_poly)
         # send pass prob calculations to csv to access in R
-        pass_probs_df.to_csv(r'/Users/EthanLee/nfl-runpass/pass_probs.csv')
+        # pass_probs_df.to_csv(r'/Users/EthanLee/nfl-runpass/pass_probs.csv')
 
     if play_type == 'pass':
         # probability of interception at each yardline, and average yards gained
@@ -188,8 +188,8 @@ pass_play = failed_yds('pass')
 
 ## Turn run_play into CSV to access in R
 run_df = pd.DataFrame(run_play)
-run_df.to_csv(r'/Users/EthanLee/nfl-runpass/run_fails.csv')
+# run_df.to_csv(r'/Users/EthanLee/nfl-runpass/run_fails.csv')
 
 ## Turn pass_play into CSV to access in R
 pass_df = pd.DataFrame(pass_play)
-pass_df.to_csv(r'/Users/EthanLee/nfl-runpass/pass_fails.csv')
+# pass_df.to_csv(r'/Users/EthanLee/nfl-runpass/pass_fails.csv')
