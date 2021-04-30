@@ -172,16 +172,24 @@ def get_decisions(nfl_pbp, max_ytg=21):
 
 
     ### Punt
+    plays = nfl_pbp[nfl_pbp.play_type == "punt"]
+
+    # average punt distance
+    punt_dist = np.zeros(99)
+    for yds in range(1, 100):
+        punt_dist[yds-1] = np.mean(plays[plays.yardline_100==yds].kick_distance) - np.mean(plays[plays.yardline_100==yds].return_yards)
+    
+    # nonparametric smooth
+    punt_dist_nonparam = nonparam_smooth(punt_dist.copy(), window=21)
+    punt_dist = dict(zip(range(1,100), punt_dist_nonparam))
 
     # expected value of punt given field position
-    plays = nfl_pbp[nfl_pbp.play_type == "punt"]
     punt = {}
-    for yds in range(1, 100):
-        punt_dist = np.mean(plays[plays.yardline_100==yds].kick_distance) - np.mean(plays[plays.yardline_100==yds].return_yards)
-        if punt_dist != punt_dist: # if nan, then touchback
+    for yds in range(1,100):
+        if punt_dist[yds] != punt_dist[yds]: # if NaN, then touchback
             punt[yds] = -1 * firstDown_pts[80]
         else:
-            punt[yds] = -1 * firstDown_pts[min(round(100-yds+punt_dist), 80)]
+            punt[yds] = -1 * firstDown_pts[min(round(100 - yds + punt_dist[yds]), 80)]
 
 
     ### Decision and expected points matrices
